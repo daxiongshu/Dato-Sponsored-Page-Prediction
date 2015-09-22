@@ -1,5 +1,5 @@
 '''
-xgboost it using folder 4 as validation
+xgboost it using fold 4 as validation
 '''
 from sklearn.ensemble import RandomForestClassifier as RF
 from sklearn.linear_model import LogisticRegression as LGR
@@ -16,12 +16,15 @@ import pickle
 def cv_model_list():
 	model_list = []
 	for num_round in [200]:
-		for max_depth in [50]:
+		for max_depth in [20]:
 			for eta in [0.1]:
 				for min_child_weight in [2]:
-					for colsample_bytree in [0.7]:
-						model_list.append((XGBC(num_round = num_round, max_depth = max_depth, eta = eta, min_child_weight = min_child_weight,
-							colsample_bytree = colsample_bytree), 'xgb_tree_%i_depth_%i_lr_%f_child_%i'%(num_round, max_depth, eta, min_child_weight)))
+					for colsample_bytree in [0.6]:
+						for subsample in [1]:
+							model_list.append((XGBC(num_round = num_round, max_depth = max_depth, eta = eta, min_child_weight = min_child_weight,
+								colsample_bytree = colsample_bytree, subsample = subsample), 
+							'xgb_tree_%i_depth_%i_lr_%f_child_%i_colsam_%f_subsam_%f'%(num_round, max_depth, eta, min_child_weight, 
+								colsample_bytree, subsample)))
 	
 	return model_list
 
@@ -38,13 +41,21 @@ def empty_list():
 			empty_file_list.append(x.strip())
 	return empty_file_list
 
-def carl_features():
-	train_fea = pickle.load(open('Xnew_train.p'))
-	train_id = pickle.load(open('IDnew_train.p'))
-	train_label = pickle.load(open('ynew_train.p'))
-	test_fea = pickle.load(open('Xnew_test.p'))
-	test_id = pickle.load(open('IDnew_test.p'))
+def xz_features():
+	xz_fea = pickle.load(open('xz_tokens_01.p'))
+	xz_id = pickle.load(open('xz_tokens_id.p'))
+	xz_fea = sparse.csr_matrix(xz_fea)
 
+	return xz_fea, xz_id
+
+
+def carl_features():
+	train_fea = pickle.load(open('Xtrain.p'))
+	train_id = pickle.load(open('trainid.p'))
+	train_label = pickle.load(open('ytrain.p'))
+	test_fea = pickle.load(open('Xtest.p'))
+	test_id = pickle.load(open('testid.p'))
+	'''
 	# get rid of some rows.
 	true_train = pd.read_csv("train_v2.csv")
 	true_train = set(true_train['file'])
@@ -53,48 +64,63 @@ def carl_features():
 	train_fea = train_fea[true_train_index,:]
 	train_label = train_label[true_train_index]
 	print "filter out the non exist rows..."
-	print train_fea.shape
+	'''
 
 	return train_fea, test_fea, train_id, test_id, train_label
 
-
 def gen_data():
 	# read data
-	empty_file_list = empty_list()
+	#empty_file_list = empty_list()
 	train = pd.read_csv("train_v2.csv")
 	test = pd.read_csv("sampleSubmission_v2.csv")
-
-	xz_feature = pd.read_csv("xz_tokens.csv")
-	xz_feature.columns = ['file'] + ['xz_token_%i'%x for x in xrange(xz_feature.shape[1]-1)]
-
-	train = pd.merge(train, xz_feature, how = 'inner', on = 'file')
-	test = pd.merge(test, xz_feature, how = 'inner', on = 'file')
-	
 	del test['sponsored']
+	xz_feature_v2 = pd.read_csv("xz_tokens_v2.csv")
+	xz_feature_v2.columns = ['file'] + ['xz_token_%i'%x for x in xrange(xz_feature_v2.shape[1]-1)]
+	train = pd.merge(train, xz_feature_v2, how = 'inner', on = 'file')
+	test = pd.merge(test, xz_feature_v2, how = 'inner', on = 'file')
+	xz_feature_v3 = pd.read_csv("xz_tokens_v3.csv")
+	xz_feature_v3.columns = ['file'] + ['xz_token_3_%i'%x for x in xrange(xz_feature_v3.shape[1]-1)]
+	train = pd.merge(train, xz_feature_v3, how = 'inner', on = 'file')
+	test = pd.merge(test, xz_feature_v3, how = 'inner', on = 'file')
+	print "original train, test shapes..."
 	print train.shape, test.shape
 
-	#train = train[~train['file'].isin(empty_file_list)].reset_index(drop = True)
-	# carl features
-	carl_fea_train,carl_fea_test,carl_train_id, carl_test_id, train_label = carl_features()
-	# carl's order
+	xz_fea, xz_id = xz_features() # xz features
+	carl_fea_train,carl_fea_test,carl_train_id, carl_test_id, train_label = carl_features() # carl features
+
+	xz_id_df = pd.DataFrame(data = {'file':xz_id,'xz_order':range(len(xz_id))})
 	carl_train_id_df = pd.DataFrame(data = {'file':carl_train_id,'carl_order':range(len(carl_train_id))})
 	carl_test_id_df = pd.DataFrame(data = {'file':carl_test_id,'carl_order':range(len(carl_test_id))})
+	train = pd.merge(train, xz_id_df, how = 'inner', on = 'file')
+	test = pd.merge(test, xz_id_df, how = 'inner', on = 'file')
 	train = pd.merge(train, carl_train_id_df, how = 'inner', on = 'file')
 	test = pd.merge(test, carl_test_id_df, how = 'inner', on = 'file')
 	# sort train and test by carl_order
 	train.sort('carl_order', inplace = True)
 	test.sort('carl_order', inplace = True)
-	del train['file'],train['sponsored'], train['carl_order']
-	del test['file'], test['carl_order']
+	xz_fea_train = xz_fea[list(train['xz_order']),:]
+	xz_fea_test = xz_fea[list(test['xz_order']),:]
+
+	del train['file'],train['sponsored'], train['xz_order']
+	del test['file'], test['xz_order']
 	train = sparse.csr_matrix(train.as_matrix())
 	test = sparse.csr_matrix(test.as_matrix())
-	# sparse matrix stack
-	print train.shape, carl_fea_train.shape
-	X = sparse.hstack((train,carl_fea_train),format='csr')
-	print test.shape, carl_fea_test.shape
-	X_test = sparse.hstack((test, carl_fea_test),format='csr')
+	print "after cleaning, train and test shape..."
+	print train.shape, test.shape
 
+	print "obtained xz features..."
+	print xz_fea_train.shape, xz_fea_test.shape
+
+	# sparse matrix stack
+	print carl_fea_train.shape, xz_fea_train.shape
+	X = sparse.hstack((train, carl_fea_train,xz_fea_train),format='csr')
+	print carl_fea_test.shape, xz_fea_test.shape
+	X_test = sparse.hstack((test, carl_fea_test, xz_fea_test),format='csr')
+	print "the final shape..."
+	print X.shape, X_test.shape
+	
 	return carl_train_id, carl_test_id, train_label, X, X_test
+
 
 def cv_model(model_list):
 	print "generating cv csv files...."
@@ -111,10 +137,9 @@ def cv_model(model_list):
 				clf.fit(X_train,label_train)
 				cv_train[validate] = clf.predict_proba(X_validate)[:,1]
 				print "finishing one fold with AUC %.6f"%AUC(label_validate, cv_train[validate])
-		#print "the AUC is %.6f"%AUC(label, cv_train)
-		#cv_output = pd.DataFrame(np.column_stack((train_id,cv_train, label)), columns=['ID','pred','label'])
-		#cv_output.convert_objects(convert_numeric=True).to_csv("validate/%s_cv.csv"%clf_name, index = False)
-
+				cv_output = pd.DataFrame({'file':train_id[validate], 'sponsored':label_validate,
+				'pred':cv_train[validate]})
+				cv_output.to_csv("xz_com_cv.csv", index = False)
 def final_result(model):
 	clf, clf_name = model
 	print "generating full model result csv files...."
@@ -129,7 +154,7 @@ def final_result(model):
 	print "files not being predicted..."
 	print not_in.shape
 	submission = pd.concat([submission,not_in],ignore_index = True)
-	submission.to_csv("xz_sub0.csv", index = False)
+	submission.to_csv("dato_pred_0.7999.csv", index = False)
 
 def model_data(cv = False):
 	if cv:

@@ -7,14 +7,12 @@ import glob
 import re
 
 # load tokens
-token1 = pickle.load(open('token1_gain.p'))
-token2 = pickle.load(open('token2_gain.p'))
-token3 = pickle.load(open('token3_gain.p'))
-token4 = pickle.load(open('token4_gain.p'))
-all_tokens = token1 + token2 + token3 + token4
+token1 = pickle.load(open('token_v2_gain1.p'))
+token2 = pickle.load(open('token_v2_gain2.p'))
+all_tokens = token1 + token2
 files = glob.glob('data/*/*raw*') # all files
 
-with open("xz_tokens.csv","wb") as outfile:
+with open("xz_tokens_v2.csv","wb") as outfile:
 	fieldnames = list(set(['file']+ all_tokens)) # file and all 4 tokens (and get rid of duplicates)
 	writer = DictWriter(outfile, fieldnames = fieldnames)
 	writer.writeheader()
@@ -26,30 +24,23 @@ with open("xz_tokens.csv","wb") as outfile:
 		with open(file_path) as f:
 			for line in f:
 				line = line.strip()
-				#token1
-				if line in token1:
-					row[line] += 1
-				#token2
 				try:
-					x=line.strip().split()[0]
-					if x in token2:
-						row[x] += 1
-				except:
-					pass
-				#token3
-				try:
-					x=line.strip().split()[-1]
-					if x in tokens3:
-						row[x] += 1
-				except:
-					pass
-				#token4
-				try:
-					tmp=re.findall(r"[\w']+", line)
+					#token1
+					tmp = re.findall('://([A-Za-z0-9][A-Za-z0-9\.]*)',line)
 					for x in tmp:
-						if x not in tokens4:
+						if x in token1:
 							row[x] += 1
 				except:
 					pass
+
+				#token2
+			try:
+				tmp = re.findall(r"[\S]+",line)
+				for x in tmp:
+					if x in token2:
+						row[x] += 1
+			except:
+				pass
+
 		writer.writerow(row)
 print "ALL DONE!! The feature csv is ready!"
