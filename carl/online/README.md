@@ -12,4 +12,6 @@ For blending, first 'normalize' the value
 
 the validation score is 0.969 on the full validation set (Xiaozhou's version)
 
+running time is 10 mins
+
 blend ftrl with xgb(0.9804) will get 0.98103 using my features only
